@@ -176,3 +176,54 @@ div[data-graph='mermaid']:has(> .peek-loader) {
   color: var(--color-prettylights-syntax-markup-deleted-text);
   background-color: var(--color-prettylights-syntax-markup-deleted-bg);
 }
+.markdown-alert {
+  padding: 0.5rem 1rem;
+  margin-bottom: 16px;
+  color: inherit;
+  border-left: 0.25em solid var(--borderColor-default, #d0d7de);
+}
+.markdown-alert > :first-child {
+  margin-top: 0;
+}
+.markdown-alert > :last-child {
+  margin-bottom: 0;
+}
+.markdown-alert .markdown-alert-title {
+  display: flex;
+  font-weight: 500;
+  align-items: center;
+  line-height: 1;
+}
+.markdown-alert .markdown-alert-title svg {
+  margin-right: 0.5rem;
+}
+.markdown-alert.markdown-alert-note {
+  border-left-color: var(--borderColor-accent-emphasis, #0969da);
+}
+.markdown-alert.markdown-alert-note .markdown-alert-title {
+  color: var(--fgColor-accent, #0969da);
+}
+.markdown-alert.markdown-alert-tip {
+  border-left-color: var(--borderColor-success-emphasis, #1a7f37);
+}
+.markdown-alert.markdown-alert-tip .markdown-alert-title {
+  color: var(--fgColor-success, #1a7f37);
+}
+.markdown-alert.markdown-alert-important {
+  border-left-color: var(--borderColor-done-emphasis, #8250df);
+}
+.markdown-alert.markdown-alert-important .markdown-alert-title {
+  color: var(--fgColor-done, #8250df);
+}
+.markdown-alert.markdown-alert-warning {
+  border-left-color: var(--borderColor-attention-emphasis, #9a6700);
+}
+.markdown-alert.markdown-alert-warning .markdown-alert-title {
+  color: var(--fgColor-attention, #9a6700);
+}
+.markdown-alert.markdown-alert-caution {
+  border-left-color: var(--borderColor-danger-emphasis, #cf222e);
+}
+.markdown-alert.markdown-alert-caution .markdown-alert-title {
+  color: var(--fgColor-danger, #cf222e);
+}
