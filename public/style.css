@@ -177,7 +177,7 @@ div[data-graph='mermaid']:has(> .peek-loader) {
   background-color: var(--color-prettylights-syntax-markup-deleted-bg);
 }
 .markdown-alert {
-  padding: 0.5rem 1rem;
+  padding: 0.5rem 1rem 0.5rem 1.5rem;
   margin-bottom: 16px;
   color: inherit;
   border-left: 0.25em solid var(--borderColor-default, #d0d7de);
