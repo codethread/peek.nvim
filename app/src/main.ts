@@ -99,7 +99,7 @@ async function init(socket: WebSocket) {
       });
     };
 
-    Deno.serve({ port: 3888, onListen }, (request) => {
+    Deno.serve({ port: 0, onListen }, (request) => {
       const { socket, response } = Deno.upgradeWebSocket(request);
 
       socket.onopen = () => {
@@ -122,9 +122,15 @@ async function init(socket: WebSocket) {
     }
   }
 
+  // ssh mode: serve at a fixed port for SSH tunnel forwarding without auto-opening a browser
+  const port = app === 'ssh' ? Number(__args['port'] || 3000) : 0;
+
   const onListen: Deno.ServeOptions['onListen'] = ({ hostname, port }) => {
     const serverUrl = `${hostname.replace('0.0.0.0', 'localhost')}:${port}`;
     logger.info(`listening on ${serverUrl}`);
+
+    if (app === 'ssh') return;
+
     const url = new URL(`http://${serverUrl}`);
     const searchParams = new URLSearchParams({ theme: __args.theme });
     url.search = searchParams.toString();
@@ -138,7 +144,7 @@ async function init(socket: WebSocket) {
 
   let timeout: number;
 
-  Deno.serve({ port: 3888, onListen }, async (request) => {
+  Deno.serve({ port, onListen }, async (request) => {
     const upgrade = request.headers.get('upgrade') || '';
 
     if (upgrade.toLowerCase() != 'websocket') {

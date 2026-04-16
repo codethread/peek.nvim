@@ -37,6 +37,10 @@ function module.setup()
     table.insert(args, '--syntax')
   end
 
+  if config.get('app') == 'ssh' then
+    table.insert(args, '--port=' .. config.get('port'))
+  end
+
   cmd = vim.list_extend({
     'deno',
     'task',
@@ -48,6 +52,20 @@ end
 function module.init(on_exit)
   if channel then
     return
+  end
+
+  if config.get('app') == 'ssh' then
+    local port = config.get('port')
+    vim.system({ 'sh', '-c', 'printf "%s@%s" "$(whoami)" "$(hostname)"' }, { text = true }, function(result)
+      local user_host = vim.trim(result.stdout)
+      vim.schedule(function()
+        vim.notify(
+          string.format('Peek: ssh -L %d:localhost:%d %s', port, port, user_host),
+          vim.log.levels.INFO,
+          {}
+        )
+      end)
+    end)
   end
 
   channel = vim.fn.jobstart(cmd, {

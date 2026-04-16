@@ -48,8 +48,10 @@ require('peek').setup({
 
   update_on_change = true,
 
-  app = 'webview',          -- 'webview', 'browser', string or a table of strings
+  app = 'webview',          -- 'webview', 'browser', 'ssh', string or a table of strings
                             -- explained below
+
+  port = 3000,              -- port to use when app is 'ssh'
 
   filetype = { 'markdown' },-- list of filetypes to recognize as markdown
 
@@ -72,6 +74,16 @@ specify browser along with arguments:
 `app = { 'chromium', '--new-window' }`
 
 [Chromium based browser](https://en.wikipedia.org/wiki/Chromium_(web_browser)#Browsers_based_on_Chromium) is recommended.
+
+Set `app = 'ssh'` when running Neovim on a remote machine over SSH. The preview server
+will bind to a fixed port (default `3000`, configurable via `port`) without opening a
+browser, so you can forward the port and open it locally:
+
+```
+ssh -L 3000:localhost:3000 user@host
+```
+
+Then open `http://localhost:3000` in your local browser.
 
 ### :bulb: Usage
 
