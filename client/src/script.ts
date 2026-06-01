@@ -62,6 +62,11 @@ addEventListener('DOMContentLoaded', () => {
       '0': zoom.reset.bind(zoom),
     };
     const plain: Record<string, () => void> = {
+      'Escape': () => {
+        if (peek.ctx === 'webview') {
+          Reflect.get(window, '_close')?.();
+        }
+      },
       'j': () => {
         window.scrollBy({ top: 50 });
       },
