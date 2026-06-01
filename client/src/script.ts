@@ -147,7 +147,8 @@ addEventListener('DOMContentLoaded', () => {
       (() => {
         const parser = new DOMParser();
 
-        function setContainerHeight(el: Element, svgElement: Element) {
+        function finishRender(el: Element, svgElement: Element) {
+          el.querySelector('.peek-loader')?.remove();
           el.parentElement?.style.setProperty(
             'height',
             window.getComputedStyle(svgElement).getPropertyValue('height'),
@@ -164,7 +165,7 @@ addEventListener('DOMContentLoaded', () => {
           if (svg) {
             const svgElement = parser.parseFromString(svg, 'text/html').body;
             el.appendChild(svgElement);
-            setContainerHeight(el, svgElement);
+            finishRender(el, svgElement);
           }
         }
 
@@ -173,7 +174,7 @@ addEventListener('DOMContentLoaded', () => {
 
           if (svgElement) {
             el.appendChild(svgElement);
-            setContainerHeight(el, svgElement);
+            finishRender(el, svgElement);
           }
         }
 

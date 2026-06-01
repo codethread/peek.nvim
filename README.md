@@ -1,6 +1,6 @@
 # peek.nvim
 
-*Markdown preview plugin for [Neovim](https://github.com/neovim/neovim)*
+_Markdown preview plugin for [Neovim](https://github.com/neovim/neovim)_
 
 ![preview](media/peek.jpg)
 
@@ -86,13 +86,36 @@ ssh -L 3000:localhost:3000 user@host
 
 Then open `http://localhost:3000` in your local browser.
 
+### :art: Diagram examples
+
+Mermaid diagrams render from fenced blocks:
+
+```mermaid
+flowchart TD
+  edit[Edit markdown] --> preview[Peek preview]
+  preview --> browser[Browser/Webview]
+```
+
+Graphviz diagrams render from `graphviz` or `dot` fenced blocks:
+
+```graphviz
+digraph Peek {
+  rankdir=LR;
+  node [shape=box, style=rounded];
+
+  nvim -> server [label="markdown"];
+  server -> preview [label="html"];
+  preview -> graphviz [label="render SVG"];
+}
+```
+
 ### :bulb: Usage
 
-| method ||
-|-|-|
-| open    | Open preview window                                 |
-| close   | Close preview window                                |
-| is_open | Returns `true` if preview window is currently open  |
+| method  |                                                    |
+| ------- | -------------------------------------------------- |
+| open    | Open preview window                                |
+| close   | Close preview window                               |
+| is_open | Returns `true` if preview window is currently open |
 
 Example command setup:
 
@@ -103,14 +126,14 @@ vim.api.nvim_create_user_command('PeekClose', require('peek').close, {})
 
 The following keybinds are active when preview window is focused:
 
-| key ||
-|-|-|
-| k | scroll up               |
-| j | scroll down             |
-| u | scroll up half a page   |
-| d | scroll down half a page |
-| g | scroll to top           |
-| G | scroll to bottom        |
+| key |                         |
+| --- | ----------------------- |
+| k   | scroll up               |
+| j   | scroll down             |
+| u   | scroll up half a page   |
+| d   | scroll down half a page |
+| g   | scroll to top           |
+| G   | scroll to bottom        |
 
 ### :mag: Preview window
 
