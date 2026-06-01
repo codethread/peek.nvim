@@ -179,7 +179,7 @@ div[data-graph='graphviz'] svg {
   background-color: var(--color-prettylights-syntax-markup-deleted-bg);
 }
 .markdown-alert {
-  padding: 0.5rem 1rem 0.5rem 1.5rem;
+  padding: 0.75rem 1rem 0.75rem 1.75rem;
   margin-bottom: 16px;
   color: inherit;
   border-left: 0.25em solid var(--borderColor-default, #d0d7de);
@@ -228,4 +228,10 @@ div[data-graph='graphviz'] svg {
 }
 .markdown-alert.markdown-alert-caution .markdown-alert-title {
   color: var(--fgColor-danger, #cf222e);
+}
+.markdown-alert.markdown-alert-info {
+  border-left-color: #0891b2;
+}
+.markdown-alert.markdown-alert-info .markdown-alert-title {
+  color: #0891b2;
 }
