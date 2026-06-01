@@ -3,6 +3,7 @@ import { slidingWindows } from 'https://deno.land/std@0.217.0/collections/slidin
 // @deno-types="https://raw.githubusercontent.com/patrick-steele-idem/morphdom/master/index.d.ts"
 import morphdom from 'https://esm.sh/morphdom@2.7.2?no-dts';
 import mermaid from './mermaid.ts';
+import graphviz from './graphviz.ts';
 
 const window = globalThis;
 // const _log = Reflect.get(window, '_log');
@@ -142,11 +143,18 @@ addEventListener('DOMContentLoaded', () => {
   const onPreview = (() => {
     mermaid.init();
 
-    const renderMermaid = debounce(
+    const renderGraphs = debounce(
       (() => {
         const parser = new DOMParser();
 
-        async function render(el: Element) {
+        function setContainerHeight(el: Element, svgElement: Element) {
+          el.parentElement?.style.setProperty(
+            'height',
+            window.getComputedStyle(svgElement).getPropertyValue('height'),
+          );
+        }
+
+        async function renderMermaid(el: Element) {
           const svg = await mermaid.render(
             `${el.id}-svg`,
             el.getAttribute('data-graph-definition')!,
@@ -156,15 +164,29 @@ addEventListener('DOMContentLoaded', () => {
           if (svg) {
             const svgElement = parser.parseFromString(svg, 'text/html').body;
             el.appendChild(svgElement);
-            el.parentElement?.style.setProperty(
-              'height',
-              window.getComputedStyle(svgElement).getPropertyValue('height'),
-            );
+            setContainerHeight(el, svgElement);
+          }
+        }
+
+        async function renderGraphviz(el: Element) {
+          const svgElement = await graphviz.render(el.getAttribute('data-graph-definition')!);
+
+          if (svgElement) {
+            el.appendChild(svgElement);
+            setContainerHeight(el, svgElement);
+          }
+        }
+
+        async function render(el: Element) {
+          if (el.getAttribute('data-graph') === 'mermaid') {
+            await renderMermaid(el);
+          } else if (el.getAttribute('data-graph') === 'graphviz') {
+            await renderGraphviz(el);
           }
         }
 
         return () => {
-          Array.from(markdownBody.querySelectorAll('div[data-graph="mermaid"]'))
+          Array.from(markdownBody.querySelectorAll('div[data-graph]'))
             .filter((el) => !el.querySelector('svg'))
             .forEach(render);
         };
@@ -175,14 +197,14 @@ addEventListener('DOMContentLoaded', () => {
     const morphdomOptions: Parameters<typeof morphdom>[2] = {
       childrenOnly: true,
       getNodeKey: (node) => {
-        if (node instanceof HTMLElement && node.getAttribute('data-graph') === 'mermaid') {
+        if (node instanceof HTMLElement && node.hasAttribute('data-graph')) {
           return node.id;
         }
         return null;
       },
       onNodeAdded: (node) => {
-        if (node instanceof HTMLElement && node.getAttribute('data-graph') === 'mermaid') {
-          renderMermaid();
+        if (node instanceof HTMLElement && node.hasAttribute('data-graph')) {
+          renderGraphs();
         }
         return node;
       },
@@ -190,15 +212,15 @@ addEventListener('DOMContentLoaded', () => {
         if (fromEl.hasAttribute('open')) {
           toEl.setAttribute('open', 'true');
         } else if (
-          fromEl.classList.contains('peek-mermaid-container') &&
-          toEl.classList.contains('peek-mermaid-container')
+          fromEl.classList.contains('peek-graph-container') &&
+          toEl.classList.contains('peek-graph-container')
         ) {
           toEl.style.height = fromEl.style.height;
         }
         return !fromEl.isEqualNode(toEl);
       },
       onBeforeElChildrenUpdated(_, toEl) {
-        return toEl.getAttribute('data-graph') !== 'mermaid';
+        return !toEl.hasAttribute('data-graph');
       },
     };
 

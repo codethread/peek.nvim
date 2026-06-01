@@ -101,19 +101,38 @@ md.renderer.rules.math_block_eqno = (() => {
 md.renderer.rules.fence = (() => {
   const fence = md.renderer.rules.fence!;
   const escapeHtml = md.utils.escapeHtml;
-  const regex = new RegExp(
+  const mermaidRegex = new RegExp(
     /^(?<frontmatter>---[\s\S]+---)?\s*(?<content>(?<charttype>graph|flowchart|sequenceDiagram|gantt|classDiagram|stateDiagram|pie|journey|C4Context|erDiagram|requirementDiagram|gitGraph)[\s\S]+)/,
   );
+  const graphvizRegex = /^(?:strict\s+)?(?:di)?graph\b[^{}]*\{/;
 
   return (tokens, idx, options, env, self) => {
     const token = tokens[idx];
     const content = token.content.trim();
+    const language = token.info.trim().split(/\s+/)[0];
 
-    if (regex.test(content)) {
-      const match = regex.exec(content);
+    if (language === 'graphviz' || language === 'dot' || graphvizRegex.test(content)) {
       return `
         <div
-          class="peek-mermaid-container"
+          class="peek-graph-container peek-graphviz-container"
+          data-line-begin="${token.attrGet('data-line-begin')}"
+        >
+          <div
+            id="graph-graphviz-${env.genId(hashCode(content))}"
+            data-graph="graphviz"
+            data-graph-definition="${escapeHtml(content)}"
+          >
+            <div class="peek-loader"></div>
+          </div>
+        </div>
+      `;
+    }
+
+    if (mermaidRegex.test(content)) {
+      const match = mermaidRegex.exec(content);
+      return `
+        <div
+          class="peek-graph-container peek-mermaid-container"
           data-line-begin="${token.attrGet('data-line-begin')}"
         >
           <div

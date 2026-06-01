@@ -11,6 +11,7 @@
 - github-style look
 - [TeX](https://github.com/KaTeX/KaTeX) math
 - [Mermaid](https://github.com/mermaid-js/mermaid) diagrams
+- [Graphviz](https://graphviz.org/) diagrams
 
 ### :battery: Requirements
 

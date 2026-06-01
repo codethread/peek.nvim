@@ -74,6 +74,11 @@ const result = await Promise.allSettled([
   ),
 
   download(
+    'https://cdn.jsdelivr.net/npm/@viz-js/viz@3/lib/viz-standalone.js',
+    'public/viz-standalone.js',
+  ),
+
+  download(
     'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css',
     'public/katex.min.css',
   ),
