@@ -151,7 +151,19 @@ md.renderer.rules.fence = (() => {
 })();
 
 export function render(markdown: string) {
-  const tokens = md.parse(markdown, {});
+  let frontmatterHtml = '';
+  let content = markdown;
+
+  const frontmatterMatch = /^---\r?\n[\s\S]*?\r?\n(?:---|\.\.\.)[ \t]*(?:\r?\n|$)/.exec(markdown);
+  if (frontmatterMatch) {
+    const frontmatter = frontmatterMatch[0];
+    const lineCount = (frontmatter.match(/\n/g) || []).length;
+    frontmatterHtml = `<pre class="peek-frontmatter" data-line-begin="1"><code>${md.utils.escapeHtml(frontmatter.trimEnd())}</code></pre>`;
+    // Preserve line positions for scroll sync by replacing frontmatter with blank lines
+    content = '\n'.repeat(lineCount) + markdown.slice(frontmatter.length);
+  }
+
+  const tokens = md.parse(content, {});
 
   tokens.forEach((token) => {
     if (token.map && token.level === 0) {
@@ -159,5 +171,5 @@ export function render(markdown: string) {
     }
   });
 
-  return md.renderer.render(tokens, md.options, { genId: uniqueIdGen() });
+  return frontmatterHtml + md.renderer.render(tokens, md.options, { genId: uniqueIdGen() });
 }
