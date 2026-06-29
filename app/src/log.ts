@@ -1,22 +1,22 @@
 import { parseArgs } from 'https://deno.land/std@0.217.0/cli/parse_args.ts';
 import { dirname, join, normalize } from 'https://deno.land/std@0.217.0/path/mod.ts';
-import {
-  getLogger,
-  LogRecord,
-  RotatingFileHandler,
-  setup,
-} from 'https://deno.land/std@0.217.0/log/mod.ts';
 
 const __args = parseArgs(Deno.args);
 
 const logfile = __args['logfile']
-  ? normalize(__args['logfile'])
+  ? normalize(String(__args['logfile']))
   : join(dirname(new URL(import.meta.url).pathname), '../../peek.log');
 
-function formatter(logRecord: LogRecord) {
-  const { levelName, msg, args, datetime } = logRecord;
+type LogArg = string | number | boolean | null | undefined | object;
 
-  const timestamp = datetime.toLocaleDateString('en-GB', {
+type Logger = {
+  info: (msg: string, ...args: LogArg[]) => void;
+};
+
+let logger: Logger | undefined;
+
+function timestamp() {
+  return new Date().toLocaleDateString('en-GB', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
@@ -26,35 +26,35 @@ function formatter(logRecord: LogRecord) {
     hourCycle: 'h23',
     fractionalSecondDigits: 3,
   });
+}
 
+function formatArg(arg: LogArg) {
+  if (typeof arg === 'object' && arg !== null) return JSON.stringify(arg);
+  return String(arg);
+}
+
+function write(levelName: string, msg: string, args: LogArg[]) {
   const pid = Deno.pid.toString().padEnd(8, ' ');
-
-  return `${levelName.padEnd(9, ' ')} ${pid} ${timestamp}  ${msg} ${args.join(' ')}`;
+  const suffix = args.length ? ` ${args.map(formatArg).join(' ')}` : '';
+  Deno.writeTextFileSync(
+    logfile,
+    `${levelName.padEnd(9, ' ')} ${pid} ${timestamp()}  ${msg}${suffix}\n`,
+    { append: true },
+  );
 }
 
 function setupLogger() {
-  setup({
-    handlers: {
-      file: new RotatingFileHandler('INFO', {
-        filename: logfile,
-        formatter,
-        maxBytes: 1_000_000,
-        maxBackupCount: 1,
-      }),
+  logger = {
+    info(msg: string, ...args: LogArg[]) {
+      write('INFO', msg, args);
     },
-    loggers: {
-      file: {
-        level: 'INFO',
-        handlers: ['file'],
-      },
-    },
-  });
+  };
 
-  return getLogger('file');
+  return logger;
 }
 
 function get() {
-  return getLogger('file');
+  return logger || setupLogger();
 }
 
 export default { setupLogger, get };

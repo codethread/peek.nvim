@@ -8,11 +8,32 @@ import graphviz from './graphviz.ts';
 const window = globalThis;
 // const _log = Reflect.get(window, '_log');
 
+type SourceId = string;
+
+type PreviewState = {
+  id: SourceId;
+  label: string;
+  html: string;
+  lcount: number;
+  line?: number;
+  base?: string;
+};
+
+type PreviewMessage =
+  | { action: 'show'; html: string; lcount: number; sourceId?: SourceId }
+  | { action: 'scroll'; line: number; sourceId?: SourceId }
+  | { action: 'base'; base: string; sourceId?: SourceId }
+  | { action: 'label'; label: string; sourceId?: SourceId }
+  | { action: 'tabs'; tabs: PreviewState[]; activeId?: SourceId };
+
 addEventListener('DOMContentLoaded', () => {
   const body = document.body;
   const markdownBody = document.getElementById('peek-markdown-body') as HTMLDivElement;
   const base = document.getElementById('peek-base') as HTMLBaseElement;
+  const tabbar = document.getElementById('peek-tabs') as HTMLDivElement;
   const peek = getInjectConfig();
+  const sessions = new Map<SourceId, PreviewState>();
+  let activeId: SourceId | undefined;
   let source: { lcount: number } | undefined;
   let blocks: HTMLElement[][] | undefined;
   let scroll: { line: number } | undefined;
@@ -95,12 +116,12 @@ addEventListener('DOMContentLoaded', () => {
 
   onload = () => {
     const item = sessionStorage.getItem('session');
-    if (item) {
-      const session = JSON.parse(item);
-      base.href = session.base;
-      onPreview({ html: session.html, lcount: session.lcount });
-      onScroll({ line: session.line });
-    }
+    if (!item) return;
+
+    const session = JSON.parse(item);
+    base.href = session.base;
+    onPreview({ html: session.html, lcount: session.lcount });
+    onScroll({ line: session.line });
   };
 
   onbeforeunload = () => {
@@ -115,7 +136,6 @@ addEventListener('DOMContentLoaded', () => {
     );
   };
 
-  const decoder = new TextDecoder();
   const socket = new WebSocket(`ws://${peek.serverUrl}/`);
 
   socket.binaryType = 'arraybuffer';
@@ -127,23 +147,115 @@ addEventListener('DOMContentLoaded', () => {
     }
   };
 
-  socket.onmessage = (event) => {
-    const data = JSON.parse(decoder.decode(event.data));
+  socket.onmessage = async (event) => {
+    const data = await parseMessage(event.data);
 
     switch (data.action) {
+      case 'tabs':
+        onTabs(data);
+        break;
       case 'show':
-        onPreview(data);
+        updateSession(data.sourceId, { html: data.html, lcount: data.lcount });
+        if (isActive(data.sourceId)) onPreview(data);
         break;
       case 'scroll':
-        onScroll(data);
+        updateSession(data.sourceId, { line: Number(data.line) });
+        if (isActive(data.sourceId)) onScroll({ line: Number(data.line) });
         break;
       case 'base':
-        base.href = data.base;
+        updateSession(data.sourceId, { base: data.base });
+        if (isActive(data.sourceId)) base.href = data.base;
+        break;
+      case 'label':
+        updateSession(data.sourceId, { label: data.label });
+        renderTabs(Array.from(sessions.values()));
         break;
       default:
         break;
     }
   };
+
+  async function parseMessage(data: string | ArrayBuffer | Blob): Promise<PreviewMessage> {
+    if (data instanceof Blob) data = await data.text();
+    if (data instanceof ArrayBuffer) data = new TextDecoder().decode(data);
+    return JSON.parse(data);
+  }
+
+  function isActive(sourceId?: SourceId) {
+    return !sourceId || sourceId === activeId;
+  }
+
+  function updateSession(sourceId: SourceId | undefined, patch: Partial<PreviewState>) {
+    if (!sourceId) return;
+    sessions.set(sourceId, {
+      id: sourceId,
+      label: '',
+      lcount: 1,
+      html: '',
+      ...sessions.get(sourceId),
+      ...patch,
+    });
+  }
+
+  function onTabs(data: Extract<PreviewMessage, { action: 'tabs' }>) {
+    sessions.clear();
+
+    for (const tab of data.tabs) {
+      sessions.set(tab.id, tab);
+    }
+
+    activeId = data.activeId || data.tabs[0]?.id;
+    renderTabs(data.tabs);
+
+    const active = activeId ? sessions.get(activeId) : undefined;
+    if (!active) {
+      source = undefined;
+      blocks = undefined;
+      scroll = undefined;
+      base.removeAttribute('href');
+      markdownBody.innerHTML = '<div class="peek-loader"></div>';
+      return;
+    }
+
+    activateSession(active);
+  }
+
+  function activateSession(active: PreviewState) {
+    base.href = active.base || '';
+    onPreview({ html: active.html, lcount: active.lcount });
+
+    if (active.line) {
+      onScroll({ line: active.line });
+    } else {
+      scroll = undefined;
+      window.scrollTo({ top: 0 });
+    }
+  }
+
+  function tabLabel(label: string) {
+    return label.split(/[\\/]/).filter(Boolean).pop() || label;
+  }
+
+  function renderTabs(tabs: PreviewState[]) {
+    tabbar.hidden = tabs.length < 2;
+    tabbar.replaceChildren(...tabs.map((tab) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'peek-tab';
+      button.textContent = tabLabel(tab.label);
+      button.title = tab.label;
+      button.toggleAttribute('aria-current', tab.id === activeId);
+      button.addEventListener('click', () => {
+        activeId = tab.id;
+        socket.send(JSON.stringify({ action: 'activate', sourceId: tab.id }));
+        const active = sessions.get(tab.id);
+        if (!active) return;
+        activateSession(active);
+        renderTabs(Array.from(sessions.values()));
+      });
+      return button;
+    }));
+  }
 
   const onPreview = (() => {
     mermaid.init();

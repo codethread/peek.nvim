@@ -16,54 +16,276 @@ const version = Deno.version;
 logger.info(`DENO_ENV: ${DENO_ENV}`, ...Deno.args);
 logger.info(`deno: ${version.deno} v8: ${version.v8} typescript: ${version.typescript}`);
 
+type SourceId = string;
+
+type PreviewState = {
+  id: SourceId;
+  label: string;
+  html: string;
+  lcount: number;
+  line?: string;
+  base?: string;
+};
+
+type PreviewMessage =
+  | { action: 'show'; html: string; lcount: number; sourceId?: SourceId }
+  | { action: 'scroll'; line: string; sourceId?: SourceId }
+  | { action: 'base'; base: string; sourceId?: SourceId }
+  | { action: 'label'; label: string; sourceId?: SourceId }
+  | { action: 'tabs'; tabs: PreviewState[]; activeId?: SourceId }
+  | { action: 'registered'; sourceId: SourceId; label: string }
+  | { action: 'activate'; sourceId: SourceId };
+
+function describeMessage(message: PreviewMessage) {
+  switch (message.action) {
+    case 'show':
+      return `show source=${
+        message.sourceId || '-'
+      } html=${message.html.length} lcount=${message.lcount}`;
+    case 'scroll':
+      return `scroll source=${message.sourceId || '-'} line=${message.line}`;
+    case 'base':
+      return `base source=${message.sourceId || '-'} base=${message.base}`;
+    case 'label':
+      return `label source=${message.sourceId || '-'} label=${message.label}`;
+    case 'tabs':
+      return `tabs count=${message.tabs.length} active=${message.activeId || '-'}`;
+    case 'registered':
+      return `registered source=${message.sourceId} label=${message.label}`;
+    case 'activate':
+      return `activate source=${message.sourceId}`;
+  }
+}
+
+function send(socket: WebSocket, message: PreviewMessage) {
+  if (socket.readyState === WebSocket.OPEN) {
+    logger.info(`ws send ${describeMessage(message)}`);
+    socket.send(JSON.stringify(message));
+  }
+}
+
+function sourceSnapshot(source: PreviewState): PreviewState {
+  return { ...source };
+}
+
+function createHub() {
+  let nextSourceNumber = 1;
+  const viewers = new Set<WebSocket>();
+  const viewerActiveIds = new Map<WebSocket, SourceId | undefined>();
+  const sources = new Map<SourceId, PreviewState>();
+
+  function defaultActiveId(activeId?: SourceId) {
+    return activeId && sources.has(activeId) ? activeId : sources.keys().next().value;
+  }
+
+  function tabsMessage(activeId?: SourceId): PreviewMessage {
+    return {
+      action: 'tabs',
+      tabs: Array.from(sources.values(), sourceSnapshot),
+      activeId: defaultActiveId(activeId),
+    };
+  }
+
+  function broadcast(message: PreviewMessage) {
+    for (const viewer of viewers) send(viewer, message);
+  }
+
+  function broadcastTabs() {
+    for (const viewer of viewers) {
+      const activeId = defaultActiveId(viewerActiveIds.get(viewer));
+      viewerActiveIds.set(viewer, activeId);
+      send(viewer, tabsMessage(activeId));
+    }
+  }
+
+  function registerSource() {
+    const sourceNumber = nextSourceNumber++;
+    const source: PreviewState = {
+      id: crypto.randomUUID(),
+      label: String(sourceNumber),
+      html: '',
+      lcount: 1,
+    };
+
+    sources.set(source.id, source);
+    logger.info(
+      `hub source registered id=${source.id} label=${source.label} total=${sources.size}`,
+    );
+    broadcastTabs();
+
+    return source;
+  }
+
+  function unregisterSource(sourceId: SourceId) {
+    if (!sources.delete(sourceId)) return;
+    logger.info(`hub source unregistered id=${sourceId} total=${sources.size}`);
+    broadcastTabs();
+  }
+
+  function updateSource(sourceId: SourceId, message: PreviewMessage) {
+    const source = sources.get(sourceId);
+    if (!source) return;
+
+    switch (message.action) {
+      case 'show':
+        source.html = message.html;
+        source.lcount = message.lcount;
+        break;
+      case 'scroll':
+        source.line = message.line;
+        break;
+      case 'base':
+        source.base = message.base;
+        break;
+      case 'label':
+        source.label = message.label;
+        break;
+      default:
+        return;
+    }
+
+    logger.info(`hub source update ${describeMessage({ ...message, sourceId })}`);
+    if (message.action === 'label') {
+      broadcastTabs();
+    } else {
+      broadcast({ ...message, sourceId });
+    }
+  }
+
+  function addViewer(socket: WebSocket) {
+    viewers.add(socket);
+    viewerActiveIds.set(socket, defaultActiveId());
+    logger.info(
+      `hub viewer connected viewers=${viewers.size} active=${viewerActiveIds.get(socket) || '-'}`,
+    );
+    send(socket, tabsMessage(viewerActiveIds.get(socket)));
+
+    socket.onmessage = (event) => {
+      const data = parseSocketMessage(event.data);
+      if (data?.action !== 'activate') return;
+      if (!sources.has(data.sourceId)) return;
+      viewerActiveIds.set(socket, data.sourceId);
+      logger.info(`hub viewer activate source=${data.sourceId}`);
+      send(socket, tabsMessage(data.sourceId));
+    };
+
+    socket.onclose = () => {
+      viewers.delete(socket);
+      viewerActiveIds.delete(socket);
+      logger.info(`hub viewer disconnected viewers=${viewers.size}`);
+    };
+  }
+
+  function addSource(socket: WebSocket) {
+    const source = registerSource();
+    send(socket, { action: 'registered', sourceId: source.id, label: source.label });
+
+    socket.onmessage = (event) => {
+      const data = parseSocketMessage(event.data);
+      if (data) updateSource(source.id, data);
+    };
+
+    socket.onclose = () => {
+      unregisterSource(source.id);
+    };
+  }
+
+  return {
+    registerSource,
+    unregisterSource,
+    updateSource,
+    addViewer,
+    addSource,
+  };
+}
+
+function parseSocketMessage(data: string | ArrayBuffer | Blob): PreviewMessage | undefined {
+  if (data instanceof ArrayBuffer) {
+    data = new TextDecoder().decode(data);
+  }
+
+  if (typeof data !== 'string') return;
+
+  try {
+    return JSON.parse(data);
+  } catch (_) {
+    return;
+  }
+}
+
+async function readStdin(onMessage: (message: PreviewMessage) => void) {
+  if (DENO_ENV === 'development') return;
+
+  const decoder = new TextDecoder();
+  const generator = readChunks(Deno.stdin);
+
+  logger.info('stdin reader started');
+
+  for await (const chunk of generator) {
+    const action = decoder.decode(chunk.buffer);
+    logger.info(`stdin action=${action}`);
+
+    switch (action) {
+      case 'show': {
+        const content = decoder.decode((await generator.next()).value!);
+        const message = {
+          action: 'show' as const,
+          html: render(content),
+          lcount: (content.match(/(?:\r?\n)/g) || []).length + 1,
+        };
+        logger.info(`stdin show content=${content.length} html=${message.html.length}`);
+        onMessage(message);
+        break;
+      }
+      case 'scroll':
+        onMessage({ action, line: decoder.decode((await generator.next()).value!) });
+        break;
+      case 'base':
+        onMessage({
+          action,
+          base: normalize(decoder.decode((await generator.next()).value!) + '/'),
+        });
+        break;
+      case 'label':
+        onMessage({ action, label: decoder.decode((await generator.next()).value!) });
+        break;
+      case 'close':
+        return;
+      default:
+        break;
+    }
+  }
+}
+
 async function init(socket: WebSocket) {
   if (DENO_ENV === 'development') {
     return void (await import(join(__dirname, 'ipc_dev.ts'))).default(socket);
   }
 
-  const encoder = new TextEncoder();
-  const decoder = new TextDecoder();
-
-  const generator = readChunks(Deno.stdin);
-
   try {
-    for await (const chunk of generator) {
-      const action = decoder.decode(chunk.buffer);
-
-      switch (action) {
-        case 'show': {
-          const content = decoder.decode((await generator.next()).value!);
-
-          socket.send(encoder.encode(JSON.stringify({
-            action: 'show',
-            html: render(content),
-            lcount: (content.match(/(?:\r?\n)/g) || []).length + 1,
-          })));
-
-          break;
-        }
-        case 'scroll': {
-          socket.send(encoder.encode(JSON.stringify({
-            action,
-            line: decoder.decode((await generator.next()).value!),
-          })));
-          break;
-        }
-        case 'base': {
-          socket.send(encoder.encode(JSON.stringify({
-            action,
-            base: normalize(decoder.decode((await generator.next()).value!) + '/'),
-          })));
-          break;
-        }
-        default: {
-          break;
-        }
-      }
-    }
+    await readStdin((message) => send(socket, message));
   } catch (e) {
-    if (e.name !== 'InvalidStateError') throw e;
+    if (!(e instanceof Error) || e.name !== 'InvalidStateError') throw e;
   }
+}
+
+async function attachToPersistentServer(port: number) {
+  logger.info(`attach source to existing server port=${port}`);
+  const socket = new WebSocket(`ws://127.0.0.1:${port}/?role=source`);
+
+  await new Promise<void>((resolve, reject) => {
+    socket.onopen = () => {
+      logger.info(`attached source to existing server port=${port}`);
+      resolve();
+    };
+    socket.onerror = () => reject(new Error(`Unable to connect to Peek server on port ${port}`));
+  });
+
+  await readStdin((message) => send(socket, message))
+    .catch((e) => {
+      if (!(e instanceof Error) || e.message !== 'EOF') throw e;
+    })
+    .finally(() => socket.close());
 }
 
 (() => {
@@ -122,8 +344,8 @@ async function init(socket: WebSocket) {
     }
   }
 
-  // ssh mode: serve at a fixed port for SSH tunnel forwarding without auto-opening a browser
   const port = app === 'ssh' ? Number(__args['port'] || 3000) : 0;
+  const hub = createHub();
 
   const onListen: Deno.ServeOptions['onListen'] = ({ hostname, port }) => {
     const serverUrl = `${hostname.replace('0.0.0.0', 'localhost')}:${port}`;
@@ -142,42 +364,66 @@ async function init(socket: WebSocket) {
       });
   };
 
-  let timeout: number;
-
-  Deno.serve(
-    { hostname: app === 'ssh' ? '127.0.0.1' : undefined, port, onListen },
-    async (request) => {
-      const upgrade = request.headers.get('upgrade') || '';
-
-      if (upgrade.toLowerCase() != 'websocket') {
+  try {
+    Deno.serve(
+      { hostname: app === 'ssh' ? '127.0.0.1' : undefined, port, onListen },
+      async (request) => {
         const url = new URL(request.url);
+        const upgrade = request.headers.get('upgrade') || '';
+        logger.info(
+          `http request method=${request.method} path=${url.pathname} websocket=${
+            upgrade.toLowerCase() == 'websocket'
+          } role=${url.searchParams.get('role') || '-'}`,
+        );
 
-        if (app === 'ssh' && !url.searchParams.has('theme')) {
-          url.searchParams.set('theme', String(__args.theme));
-          return Response.redirect(url, 307);
+        if (upgrade.toLowerCase() != 'websocket') {
+          if (app === 'ssh' && !url.searchParams.has('theme')) {
+            url.searchParams.set('theme', String(__args.theme));
+            return Response.redirect(url, 307);
+          }
+
+          const file = await findFile(request.url);
+          return new Response(file?.readable || 'Not Found', { status: file ? 200 : 404 });
         }
 
-        const file = await findFile(request.url);
-        return new Response(file?.readable || 'Not Found', { status: file ? 200 : 404 });
-      }
+        const { socket, response } = Deno.upgradeWebSocket(request);
+        const role = url.searchParams.get('role');
 
-      clearTimeout(timeout);
+        socket.onopen = () => {
+          logger.info(`ws open role=${role || 'viewer'} app=${app}`);
+          if (app === 'ssh' && role === 'source') {
+            hub.addSource(socket);
+          } else if (app === 'ssh') {
+            hub.addViewer(socket);
+          } else {
+            init(socket);
+          }
+        };
 
-      const { socket, response } = Deno.upgradeWebSocket(request);
+        socket.onerror = () => logger.info(`ws error role=${role || 'viewer'} app=${app}`);
 
-      socket.onopen = () => {
-        init(socket);
-      };
+        return response;
+      },
+    );
+  } catch (error) {
+    if (app !== 'ssh' || !(error instanceof Deno.errors.AddrInUse)) throw error;
+    logger.info(`server port in use; switching to source attach port=${port}`);
+    attachToPersistentServer(port).catch((e) => {
+      Deno.stderr.writeSync(new TextEncoder().encode(`${e.message}\n`));
+      Deno.exit(1);
+    });
+    return;
+  }
 
-      socket.onclose = () => {
-        timeout = setTimeout(() => {
-          Deno.exit();
-        }, 2000);
-      };
-
-      return response;
-    },
-  );
+  if (app === 'ssh') {
+    logger.info(`ssh hub owner reading stdin port=${port}`);
+    const source = hub.registerSource();
+    readStdin((message) => hub.updateSource(source.id, message))
+      .catch((e) => {
+        if (!(e instanceof Error) || e.message !== 'EOF') throw e;
+      })
+      .finally(() => hub.unregisterSource(source.id));
+  }
 })();
 
 const win_signals = ['SIGINT', 'SIGBREAK'] as const;

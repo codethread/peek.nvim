@@ -53,6 +53,7 @@ require('peek').setup({
                             -- explained below
 
   port = 3000,              -- port to use when app is 'ssh'
+  ssh_port = nil,           -- optional override for SSH mode only
 
   filetype = { 'markdown' },-- list of filetypes to recognize as markdown
 
@@ -77,14 +78,22 @@ specify browser along with arguments:
 [Chromium based browser](https://en.wikipedia.org/wiki/Chromium_(web_browser)#Browsers_based_on_Chromium) is recommended.
 
 Set `app = 'ssh'` when running Neovim on a remote machine over SSH. The preview server
-will bind to a fixed port (default `3000`, configurable via `port`) without opening a
-browser, so you can forward the port and open it locally:
+will bind to a fixed port (default `3000`, configurable via `port`, or `ssh_port` for
+an SSH-only override) without opening a browser, so you can forward the port and open
+it locally:
 
 ```
 ssh -L 3000:localhost:3000 user@host
 ```
 
 Then open `http://localhost:3000` in your local browser.
+
+Multiple Neovim sessions can share the same SSH preview server. The first `PeekOpen`
+starts the server on the configured port; later `PeekOpen` calls from other Neovim
+sessions attach to that server as additional numbered tabs in the browser UI. In SSH
+mode, `PeekClose` closes the current Neovim session's tab but leaves the shared server
+running. Server logs are written to Neovim's log directory as `peek.log`; Lua client
+request logs are written beside it as `peek-lua.log`.
 
 ### :art: Diagram examples
 

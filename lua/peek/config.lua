@@ -10,6 +10,7 @@ local config = {
   throttle_time = 'auto',
   app = 'webview',
   port = 3000,
+  ssh_port = nil,
   filetype = { 'markdown' },
 }
 
@@ -69,6 +70,7 @@ function module.setup(incoming)
     throttle_time = { incoming.throttle_time, optional(one_of({ 'auto', of_type('number') })), '"auto" or number' },
     app = { incoming.app, optional(one_of({ of_type('string'), every(of_type('string')) })), 'string or string[]' },
     port = { incoming.port, 'number', true },
+    ssh_port = { incoming.ssh_port, 'number', true },
     filetype = { incoming.filetype, optional(every(of_type('string'))), 'string[]' },
   })
 
