@@ -1,6 +1,9 @@
 public/*
 !public/index.html
 !public/style.css
+!public/favicon.svg
+!public/favicon.png
+!public/favicon.ico
 .luarc.json
 peek.log
 deno.lock

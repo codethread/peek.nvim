@@ -339,9 +339,20 @@ async function attachToPersistentServer(port: number) {
 
     for (const base of [Deno.mainModule, 'file:']) {
       try {
-        return await Deno.open(new URL(path, base));
+        return { file: await Deno.open(new URL(path, base)), path };
       } catch (_) { /**/ }
     }
+  }
+
+  function contentType(path: string) {
+    if (path.endsWith('.css')) return 'text/css';
+    if (path.endsWith('.html')) return 'text/html';
+    if (path.endsWith('.js')) return 'text/javascript';
+    if (path.endsWith('.png')) return 'image/png';
+    if (path.endsWith('.svg')) return 'image/svg+xml';
+    if (path.endsWith('.ico')) return 'image/x-icon';
+    if (path.endsWith('.woff2')) return 'font/woff2';
+    return 'application/octet-stream';
   }
 
   const port = app === 'ssh' ? Number(__args['port'] || 3000) : 0;
@@ -377,13 +388,17 @@ async function attachToPersistentServer(port: number) {
         );
 
         if (upgrade.toLowerCase() != 'websocket') {
-          if (app === 'ssh' && !url.searchParams.has('theme')) {
+          if (app === 'ssh' && url.pathname === '/' && !url.searchParams.has('theme')) {
             url.searchParams.set('theme', String(__args.theme));
             return Response.redirect(url, 307);
           }
 
-          const file = await findFile(request.url);
-          return new Response(file?.readable || 'Not Found', { status: file ? 200 : 404 });
+          const result = await findFile(request.url);
+          if (!result) return new Response('Not Found', { status: 404 });
+
+          return new Response(result.file.readable, {
+            headers: { 'content-type': contentType(result.path) },
+          });
         }
 
         const { socket, response } = Deno.upgradeWebSocket(request);
