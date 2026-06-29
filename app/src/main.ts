@@ -144,30 +144,40 @@ async function init(socket: WebSocket) {
 
   let timeout: number;
 
-  Deno.serve({ port, onListen }, async (request) => {
-    const upgrade = request.headers.get('upgrade') || '';
+  Deno.serve(
+    { hostname: app === 'ssh' ? '127.0.0.1' : undefined, port, onListen },
+    async (request) => {
+      const upgrade = request.headers.get('upgrade') || '';
 
-    if (upgrade.toLowerCase() != 'websocket') {
-      const file = await findFile(request.url);
-      return new Response(file?.readable || 'Not Found', { status: file ? 200 : 404 });
-    }
+      if (upgrade.toLowerCase() != 'websocket') {
+        const url = new URL(request.url);
 
-    clearTimeout(timeout);
+        if (app === 'ssh' && !url.searchParams.has('theme')) {
+          url.searchParams.set('theme', String(__args.theme));
+          return Response.redirect(url, 307);
+        }
 
-    const { socket, response } = Deno.upgradeWebSocket(request);
+        const file = await findFile(request.url);
+        return new Response(file?.readable || 'Not Found', { status: file ? 200 : 404 });
+      }
 
-    socket.onopen = () => {
-      init(socket);
-    };
+      clearTimeout(timeout);
 
-    socket.onclose = () => {
-      timeout = setTimeout(() => {
-        Deno.exit();
-      }, 2000);
-    };
+      const { socket, response } = Deno.upgradeWebSocket(request);
 
-    return response;
-  });
+      socket.onopen = () => {
+        init(socket);
+      };
+
+      socket.onclose = () => {
+        timeout = setTimeout(() => {
+          Deno.exit();
+        }, 2000);
+      };
+
+      return response;
+    },
+  );
 })();
 
 const win_signals = ['SIGINT', 'SIGBREAK'] as const;

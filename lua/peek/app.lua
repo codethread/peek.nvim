@@ -58,12 +58,10 @@ function module.init(on_exit)
     local port = config.get('port')
     vim.system({ 'sh', '-c', 'printf "%s@%s" "$(whoami)" "$(hostname)"' }, { text = true }, function(result)
       local user_host = vim.trim(result.stdout)
+      local ssh_command = string.format('ssh -L %d:localhost:%d %s', port, port, user_host)
       vim.schedule(function()
-        vim.notify(
-          string.format('Peek: ssh -L %d:localhost:%d %s', port, port, user_host),
-          vim.log.levels.INFO,
-          {}
-        )
+        vim.fn.setreg('+', ssh_command)
+        vim.notify('Peek: ssh port copied', vim.log.levels.INFO, {})
       end)
     end)
   end
