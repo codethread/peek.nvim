@@ -377,7 +377,7 @@ async function attachToPersistentServer(port: number) {
 
   try {
     Deno.serve(
-      { hostname: app === 'ssh' ? '127.0.0.1' : undefined, port, onListen },
+      { hostname: app === 'ssh' ? '0.0.0.0' : undefined, port, onListen },
       async (request) => {
         const url = new URL(request.url);
         const upgrade = request.headers.get('upgrade') || '';

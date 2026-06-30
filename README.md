@@ -77,10 +77,14 @@ specify browser along with arguments:
 
 [Chromium based browser](https://en.wikipedia.org/wiki/Chromium_(web_browser)#Browsers_based_on_Chromium) is recommended.
 
-Set `app = 'ssh'` when running Neovim on a remote machine over SSH. The preview server
-will bind to a fixed port (default `3000`, configurable via `port`, or `ssh_port` for
-an SSH-only override) without opening a browser, so you can forward the port and open
-it locally:
+Set `app = 'ssh'` when running Neovim on a remote machine over SSH or when you want
+to view the preview from another machine on your LAN. The preview server will bind to
+a fixed port (default `3000`, configurable via `port`, or `ssh_port` for an SSH-only
+override) without opening a browser.
+
+From another machine on your LAN, open `http://<host-ip>:3000`.
+
+You can also forward the port over SSH and open it locally:
 
 ```
 ssh -L 3000:localhost:3000 user@host
