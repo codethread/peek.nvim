@@ -1,18 +1,42 @@
 html {
-  background: #333;
+  /* gutter behind the centered reading column; light variant set via :has below */
+  background: #1c2128;
+}
+:root:has(.peek-body[data-theme='light']) {
+  background: #eaeef2;
 }
 body::-webkit-scrollbar {
-  width: 4px;
+  width: 10px;
 }
 body::-webkit-scrollbar-track {
-  background: #333;
+  background: transparent;
 }
 body::-webkit-scrollbar-thumb {
-  background-color: #555;
+  /* transparent border + padding-box clip keeps the visible bar thin but grabbable */
+  background-color: #444c56;
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+body::-webkit-scrollbar-thumb:hover {
+  background-color: #545d68;
+}
+.peek-body[data-theme='light']::-webkit-scrollbar-thumb {
+  background-color: #afb8c1;
 }
 .peek-body {
   margin: 0;
   padding: 0;
+  background: #1c2128;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans',
+    Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji';
+  /* antialiased renders thinner strokes, which curbs glare/halation on dark surfaces */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+.peek-body[data-theme='light'] {
+  background: #eaeef2;
 }
 .peek-frontmatter {
   border-left: 3px solid var(--color-border-default, #d0d7de);
@@ -44,15 +68,42 @@ body::-webkit-scrollbar-thumb {
 .markdown-body {
   box-sizing: border-box;
   min-width: 200px;
-  max-width: 980px;
+  /* tighter measure than the github default 980px; ~85ch keeps prose lines scannable */
+  max-width: 50rem;
   margin: 0 auto;
-  padding: 45px;
+  padding: 48px 48px 80px;
   min-height: 100vh;
   overflow-x: hidden;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans',
+    Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji';
+  font-size: 16px;
+  line-height: 1.7;
+}
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+  margin-top: 1.8em;
+  margin-bottom: 0.7em;
+  line-height: 1.3;
+  letter-spacing: -0.011em;
+}
+.markdown-body p,
+.markdown-body blockquote {
+  margin-bottom: 16px;
+}
+.markdown-body li + li {
+  margin-top: 0.35em;
+}
+.markdown-body table {
+  /* tables read better compact than at the loosened prose line-height */
+  line-height: 1.5;
 }
 @media (max-width: 767px) {
   .markdown-body {
-    padding: 15px 15px 30px 15px;
+    padding: 24px 16px 48px;
   }
 }
 @keyframes pulse {
@@ -78,7 +129,7 @@ body::-webkit-scrollbar-thumb {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background-color: blue;
+  background-color: var(--color-accent-fg, #539bf5);
   animation: 0.5s linear infinite alternate pulse;
 }
 .peek-loader::after {
@@ -258,4 +309,88 @@ div[data-graph='graphviz'] svg {
 }
 .markdown-alert.markdown-alert-info .markdown-alert-title {
   color: #0891b2;
+}
+
+/* Dark theme: GitHub "dark dimmed" palette, with body text nudged slightly brighter.
+   Near-white on near-black (#e6edf3 on #0d1117, ~15:1) glares and halates for many
+   readers; this softer pairing (#bcc7d1 on #22272e, ~8.8:1) stays AAA-legible without
+   the glow. Listed on both selectors because github-markdown.css scopes its own dark
+   vars to `[data-theme=dark] .markdown-body`: the first selector themes the peek chrome
+   (tabs, gutters), the second matches that specificity to win for the rendered body. */
+[data-theme='dark'],
+[data-theme='dark'] .markdown-body {
+  color-scheme: dark;
+
+  --color-canvas-default: #22272e;
+  --color-canvas-subtle: #2d333b;
+  --color-canvas-inset: #1c2128;
+  --color-canvas-overlay: #2d333b;
+
+  --color-fg-default: #bcc7d1;
+  /* lifted from dimmed's #768390, which falls to ~3.9:1 here; this clears AA (4.5:1)
+     on both canvas surfaces for its real text consumers (blockquote, h6, tab labels) */
+  --color-fg-muted: #96a3b0;
+  --color-fg-subtle: #636e7b;
+  --color-fg-on-emphasis: #cdd9e5;
+
+  --color-border-default: #444c56;
+  --color-border-muted: #373e47;
+
+  --color-neutral-muted: rgba(99, 110, 123, 0.4);
+  --color-neutral-subtle: rgba(99, 110, 123, 0.1);
+
+  --color-accent-fg: #539bf5;
+  --color-accent-emphasis: #316dca;
+  --color-accent-muted: rgba(65, 132, 228, 0.4);
+  --color-accent-subtle: rgba(65, 132, 228, 0.1);
+
+  --color-success-fg: #57ab5a;
+  --color-attention-fg: #c69026;
+  --color-danger-fg: #e5534b;
+  --color-done-fg: #986ee2;
+
+  /* dimmed syntax tokens; the default dark set is saturated enough to add to the glare */
+  --color-prettylights-syntax-comment: #768390;
+  --color-prettylights-syntax-constant: #6cb6ff;
+  --color-prettylights-syntax-entity: #dcbdfb;
+  --color-prettylights-syntax-storage-modifier-import: #bcc7d1;
+  --color-prettylights-syntax-entity-tag: #8ddb8c;
+  --color-prettylights-syntax-keyword: #f47067;
+  --color-prettylights-syntax-string: #96d0ff;
+  --color-prettylights-syntax-variable: #f69d50;
+  --color-prettylights-syntax-string-regexp: #8ddb8c;
+  --color-prettylights-syntax-markup-list: #eac55f;
+  --color-prettylights-syntax-markup-heading: #539bf5;
+  --color-prettylights-syntax-markup-italic: #bcc7d1;
+  --color-prettylights-syntax-markup-bold: #bcc7d1;
+  --color-prettylights-syntax-markup-inserted-text: #b4f1b4;
+  --color-prettylights-syntax-markup-inserted-bg: #1b4721;
+  --color-prettylights-syntax-markup-deleted-text: #ffd8d3;
+  --color-prettylights-syntax-markup-deleted-bg: #78191b;
+
+  /* alert callouts reference these tokens, which github-markdown.css leaves undefined,
+     so without this they fall back to the light-theme colors baked into the rules above */
+  --borderColor-default: #444c56;
+  --borderColor-accent-emphasis: #316dca;
+  --borderColor-success-emphasis: #347d39;
+  --borderColor-attention-emphasis: #966600;
+  --borderColor-done-emphasis: #8256d0;
+  --borderColor-danger-emphasis: #c93c37;
+  --fgColor-accent: #539bf5;
+  --fgColor-success: #57ab5a;
+  --fgColor-attention: #c69026;
+  --fgColor-done: #986ee2;
+  --fgColor-danger: #e5534b;
+}
+
+/* Inline code: a gentle tint so snippets read as code. Kept off the blue links use
+   (--color-accent-fg) to avoid confusion; :not(pre) excludes fenced/indented blocks,
+   which keep their syntax highlighting. */
+[data-theme='light'] .markdown-body :not(pre) > code {
+  color: #cf222e;
+  background-color: rgba(207, 34, 46, 0.1);
+}
+[data-theme='dark'] .markdown-body :not(pre) > code {
+  color: #f0a8a0;
+  background-color: rgba(240, 168, 160, 0.15);
 }
