@@ -41,6 +41,10 @@ body::-webkit-scrollbar-thumb:hover {
 .peek-frontmatter {
   border-left: 3px solid var(--color-border-default, #d0d7de);
 }
+/* Tab switcher. Default is a top bar, used when the viewport is too narrow to spare a
+   side gutter; the wide-viewport rule below relocates it into the left gutter. Colours are
+   all theme vars, which both palettes define on the body element, so chrome follows the
+   active theme. */
 .peek-tabs {
   position: sticky;
   top: 0;
@@ -50,9 +54,16 @@ body::-webkit-scrollbar-thumb:hover {
   background: var(--color-canvas-default, #0d1117);
   border-bottom: 1px solid var(--color-border-default, #30363d);
   z-index: 10;
+  /* tabs shrink with ellipsis to share the row, but past their min-width a crowded set
+     scrolls sideways here rather than spilling off-screen and widening the page */
+  overflow-x: auto;
 }
 .peek-tab {
   min-width: 32px;
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   padding: 4px 10px;
   color: var(--color-fg-muted, #8b949e);
   background: var(--color-canvas-subtle, #161b22);
@@ -64,6 +75,34 @@ body::-webkit-scrollbar-thumb:hover {
   color: var(--color-fg-default, #c9d1d9);
   background: var(--color-accent-muted, rgba(56, 139, 253, 0.15));
   border-color: var(--color-accent-emphasis, #1f6feb);
+}
+
+/* Wide enough that the gutter beside the 50rem reading column can hold the rail: dock the
+   tabs there as a vertical list so they stop taking a full-width bar across the top. The
+   right anchor pins the rail just left of the centered column, so it tracks the content
+   instead of drifting to the far viewport edge, and the background drops out to keep it
+   from reading as blocking chrome. */
+@media (min-width: 72rem) {
+  .peek-tabs {
+    position: fixed;
+    top: 24px;
+    bottom: 24px;
+    right: calc(50% + 25rem + 12px);
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    width: max-content;
+    max-width: 9rem;
+    padding: 0;
+    overflow-y: auto;
+    background: none;
+    border-bottom: none;
+  }
+  .peek-tab {
+    max-width: none;
+    text-align: left;
+    border-radius: 6px;
+  }
 }
 .markdown-body {
   box-sizing: border-box;
@@ -309,6 +348,21 @@ div[data-graph='graphviz'] svg {
 }
 .markdown-alert.markdown-alert-info .markdown-alert-title {
   color: #0891b2;
+}
+
+/* Light theme peek chrome. github-markdown.css scopes its light palette to `.markdown-body`
+   only, so the tabs/gutters (which read these vars by inheritance from the body element)
+   get no light values and fall back to their hardcoded dark defaults. This mirrors the dark
+   block below to give the chrome the standard GitHub light palette. */
+[data-theme='light'] {
+  --color-canvas-default: #ffffff;
+  --color-canvas-subtle: #f6f8fa;
+  --color-fg-default: #1f2328;
+  --color-fg-muted: #656d76;
+  --color-border-default: #d0d7de;
+  --color-accent-fg: #0969da;
+  --color-accent-emphasis: #0969da;
+  --color-accent-muted: rgba(84, 174, 255, 0.4);
 }
 
 /* Dark theme: GitHub "dark dimmed" palette, with body text nudged slightly brighter.
