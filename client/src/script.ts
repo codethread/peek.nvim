@@ -31,6 +31,9 @@ addEventListener('DOMContentLoaded', () => {
   const markdownBody = document.getElementById('peek-markdown-body') as HTMLDivElement;
   const base = document.getElementById('peek-base') as HTMLBaseElement;
   const tabbar = document.getElementById('peek-tabs') as HTMLDivElement;
+  const outline = document.getElementById('peek-outline') as HTMLElement;
+  const outlineToggle = document.getElementById('peek-outline-toggle') as HTMLButtonElement;
+  const outlineScrim = document.getElementById('peek-outline-scrim') as HTMLDivElement;
   const peek = getInjectConfig();
   const sessions = new Map<SourceId, PreviewState>();
   let activeId: SourceId | undefined;
@@ -257,6 +260,70 @@ addEventListener('DOMContentLoaded', () => {
     }));
   }
 
+  const buildOutline = (() => {
+    let headings: HTMLElement[] = [];
+    let links: HTMLElement[] = [];
+    let raf = 0;
+
+    function setDrawer(open: boolean) {
+      outline.toggleAttribute('data-open', open);
+      outlineScrim.hidden = !open;
+      outlineToggle.setAttribute('aria-expanded', String(open));
+    }
+
+    outlineToggle.addEventListener('click', () => {
+      setDrawer(!outline.hasAttribute('data-open'));
+    });
+    outlineScrim.addEventListener('click', () => setDrawer(false));
+    // crossing the rail/drawer breakpoint retires the drawer chrome, so normalise the
+    // open state to avoid it reappearing already-open when narrowing again
+    matchMedia('(min-width: 72rem)').addEventListener('change', () => setDrawer(false));
+
+    function syncActive() {
+      raf = 0;
+      if (!headings.length) return;
+      // the last heading scrolled past the reading offset is the current section
+      let active = 0;
+      for (let i = 0; i < headings.length; i++) {
+        if (headings[i].getBoundingClientRect().top - 100 <= 0) active = i;
+        else break;
+      }
+      links.forEach((link, i) => link.toggleAttribute('aria-current', i === active));
+    }
+
+    window.addEventListener('scroll', () => {
+      if (!raf) raf = requestAnimationFrame(syncActive);
+    }, { passive: true });
+
+    return () => {
+      headings = Array.from(markdownBody.querySelectorAll('h1, h2, h3, h4, h5, h6'));
+
+      links = headings.map((heading) => {
+        const level = Number(heading.tagName[1]);
+        const link = document.createElement('button');
+        link.type = 'button';
+        link.className = 'peek-outline-link';
+        link.textContent = heading.textContent?.trim() || '';
+        link.title = link.textContent;
+        link.style.paddingLeft = `${(level - 1) * 12 + 8}px`;
+        link.addEventListener('click', () => {
+          heading.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          setDrawer(false);
+        });
+        return link;
+      });
+
+      outline.replaceChildren(...links);
+
+      const empty = headings.length === 0;
+      outline.hidden = empty;
+      outlineToggle.hidden = empty;
+      if (empty) setDrawer(false);
+
+      syncActive();
+    };
+  })();
+
   const onPreview = (() => {
     mermaid.init();
 
@@ -359,6 +426,7 @@ addEventListener('DOMContentLoaded', () => {
     return (data: { html: string; lcount: number }) => {
       source = { lcount: data.lcount };
       morphdom(markdownBody, `<main>${data.html}</main>`, morphdomOptions);
+      buildOutline();
     };
   })();
 

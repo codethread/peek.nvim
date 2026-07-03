@@ -50,7 +50,8 @@ body::-webkit-scrollbar-thumb:hover {
   top: 0;
   display: flex;
   gap: 6px;
-  padding: 8px 12px;
+  /* right pad clears the fixed outline hamburger that docks over this bar's right edge */
+  padding: 8px 56px 8px 12px;
   background: var(--color-canvas-default, #0d1117);
   border-bottom: 1px solid var(--color-border-default, #30363d);
   z-index: 10;
@@ -104,6 +105,108 @@ body::-webkit-scrollbar-thumb:hover {
     border-radius: 6px;
   }
 }
+
+/* Document outline. Default (narrow / not enough gutter): an off-canvas drawer opened by a
+   hamburger docked at the top-right, mirroring where the tabs collapse to a top bar. The
+   wide-viewport rule below promotes it to a fixed rail in the right gutter, mirroring the
+   left tabs rail. */
+.peek-outline-toggle {
+  position: fixed;
+  top: 8px;
+  right: 12px;
+  z-index: 30;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  color: var(--color-fg-muted, #8b949e);
+  background: var(--color-canvas-subtle, #161b22);
+  border: 1px solid var(--color-border-default, #30363d);
+  border-radius: 8px;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.peek-outline-toggle:hover {
+  color: var(--color-fg-default, #c9d1d9);
+}
+.peek-outline-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 35;
+  background: rgba(0, 0, 0, 0.4);
+}
+.peek-outline {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  width: min(80vw, 18rem);
+  padding: 56px 16px 24px;
+  overflow-y: auto;
+  background: var(--color-canvas-default, #0d1117);
+  border-left: 1px solid var(--color-border-default, #30363d);
+  /* parked off-canvas; the toggle slides it in */
+  transform: translateX(100%);
+  transition: transform 0.2s ease;
+}
+.peek-outline[data-open] {
+  transform: translateX(0);
+}
+.peek-outline-link {
+  display: block;
+  width: 100%;
+  padding: 3px 8px;
+  color: var(--color-fg-muted, #8b949e);
+  background: none;
+  border: 0;
+  border-left: 2px solid transparent;
+  border-radius: 0 4px 4px 0;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.peek-outline-link:hover {
+  color: var(--color-fg-default, #c9d1d9);
+  background: var(--color-canvas-subtle, #161b22);
+}
+.peek-outline-link[aria-current] {
+  color: var(--color-fg-default, #c9d1d9);
+  border-left-color: var(--color-accent-emphasis, #1f6feb);
+}
+
+/* Wide enough for a right gutter: dock the outline there as a fixed rail (mirror of the
+   tabs rail), and retire the drawer chrome. The left anchor pins it just right of the
+   centered reading column so it tracks the content. */
+@media (min-width: 72rem) {
+  .peek-outline-toggle,
+  .peek-outline-scrim {
+    display: none;
+  }
+  .peek-outline {
+    top: 24px;
+    bottom: 24px;
+    right: auto;
+    left: calc(50% + 25rem + 12px);
+    width: max-content;
+    max-width: 9rem;
+    padding: 0;
+    background: none;
+    border-left: none;
+    transform: none;
+    transition: none;
+  }
+  .peek-outline-link {
+    font-size: 12px;
+  }
+}
+
 .markdown-body {
   box-sizing: border-box;
   min-width: 200px;
@@ -128,6 +231,8 @@ body::-webkit-scrollbar-thumb:hover {
   margin-bottom: 0.7em;
   line-height: 1.3;
   letter-spacing: -0.011em;
+  /* keep outline jumps clear of the sticky top tab bar in the narrow layout */
+  scroll-margin-top: 4rem;
 }
 .markdown-body p,
 .markdown-body blockquote {
