@@ -84,11 +84,17 @@ body::-webkit-scrollbar-thumb:hover {
    instead of drifting to the far viewport edge, and the background drops out to keep it
    from reading as blocking chrome. */
 @media (min-width: 72rem) {
+  /* Bias the reading column left of centre so the outline gutter grows. Zero at the
+     breakpoint (keeps the balanced layout where space is tight) and eases up to 4rem as
+     the window widens; the rails and column all read this so they shift together. */
+  .peek-body {
+    --peek-shift: clamp(0rem, 25vw - 18rem, 4rem);
+  }
   .peek-tabs {
     position: fixed;
     top: 24px;
     bottom: 24px;
-    right: calc(50% + 25rem + 12px);
+    right: calc(50% + 25rem + var(--peek-shift) + 12px);
     flex-direction: column;
     align-items: stretch;
     gap: 4px;
@@ -189,13 +195,16 @@ body::-webkit-scrollbar-thumb:hover {
   .peek-outline-scrim {
     display: none;
   }
+  /* left shift mirrors the reading column; the outline then fills the freed right gutter
+     (leaving a 24px margin to the viewport edge) up to a cap, so long headings get room
+     instead of ellipsing early. width:max-content keeps short outlines from stretching. */
   .peek-outline {
     top: 24px;
     bottom: 24px;
     right: auto;
-    left: calc(50% + 25rem + 12px);
+    left: calc(50% + 25rem - var(--peek-shift) + 12px);
     width: max-content;
-    max-width: 9rem;
+    max-width: min(calc(50vw - 25rem + var(--peek-shift) - 36px), 24rem);
     padding: 0;
     background: none;
     border-left: none;
@@ -204,6 +213,11 @@ body::-webkit-scrollbar-thumb:hover {
   }
   .peek-outline-link {
     font-size: 12px;
+  }
+  .markdown-body {
+    /* relative offset keeps the centred box's flow but pulls it visually left */
+    position: relative;
+    right: var(--peek-shift);
   }
 }
 
