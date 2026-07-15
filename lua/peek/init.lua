@@ -117,6 +117,10 @@ module.close = ensure_init(function()
   app.stop()
 end)
 
+module.kill = ensure_init(function()
+  app.kill()
+end)
+
 module.is_open = ensure_init(function()
   return not not augroup
 end)
@@ -127,6 +131,8 @@ function module.setup(cfg)
   throttle_at = config.get('throttle_at')
   throttle_time = tonumber(config.get('throttle_time'))
   initialized = true
+
+  vim.api.nvim_create_user_command('PeekKill', module.kill, {})
 end
 
 return module

@@ -61,11 +61,23 @@ function module.setup()
     table.insert(args, '--port=' .. ssh_port())
   end
 
+  -- Run the server bundle directly rather than via `deno task run`. The task
+  -- wrapper spawns the server as a child and does not forward SIGTERM to it, so
+  -- jobstop would kill the wrapper and orphan the server (leaking the port).
+  local root = vim.fn.fnamemodify(cwd, ':h:h:h')
+  local entry = table.concat({ root, 'public', 'main.bundle.js' }, sep)
+
   cmd = vim.list_extend({
     'deno',
-    'task',
-    '--quiet',
     'run',
+    '--quiet',
+    '--allow-read',
+    '--allow-write',
+    '--allow-net',
+    '--allow-env',
+    '--allow-run',
+    '--no-check',
+    entry,
   }, args)
 
   log(
@@ -109,7 +121,10 @@ function module.init(on_exit)
     stderr_buffered = true,
     on_stderr = function(_, err)
       log('stderr received channel=' .. tostring(channel) .. ' lines=' .. tostring(#err))
-      vim.fn.jobstop(channel)
+      -- kill/stop may have already cleared channel; jobstop(nil) raises E474
+      if channel then
+        vim.fn.jobstop(channel)
+      end
       local content = table.concat(err, '\n'):gsub('\27[[0-9;]*m', '')
       if content:len() > 0 then
         if content:match("assertion 'main_loops != NULL' failed") then
@@ -180,6 +195,28 @@ module.stop = function()
   end
 
   vim.fn.jobstop(channel)
+end
+
+module.kill = function()
+  if not channel then
+    log('kill skipped no channel')
+    return
+  end
+
+  log('kill channel=' .. tostring(channel) .. ' app=' .. vim.inspect(config.get('app')))
+  chansend(channel, message({ 'kill' }))
+  vim.fn.chanclose(channel, 'stdin')
+
+  if config.get('app') ~= 'ssh' then
+    vim.fn.jobstop(channel)
+  end
+
+  channel = nil
+  if on_exit_callback then
+    local callback = on_exit_callback
+    on_exit_callback = nil
+    callback()
+  end
 end
 
 return module

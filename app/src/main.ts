@@ -32,6 +32,7 @@ type PreviewMessage =
   | { action: 'scroll'; line: string; sourceId?: SourceId }
   | { action: 'base'; base: string; sourceId?: SourceId }
   | { action: 'label'; label: string; sourceId?: SourceId }
+  | { action: 'kill'; sourceId?: SourceId }
   | { action: 'tabs'; tabs: PreviewState[]; activeId?: SourceId }
   | { action: 'registered'; sourceId: SourceId; label: string }
   | { action: 'activate'; sourceId: SourceId };
@@ -48,6 +49,8 @@ function describeMessage(message: PreviewMessage) {
       return `base source=${message.sourceId || '-'} base=${message.base}`;
     case 'label':
       return `label source=${message.sourceId || '-'} label=${message.label}`;
+    case 'kill':
+      return `kill source=${message.sourceId || '-'}`;
     case 'tabs':
       return `tabs count=${message.tabs.length} active=${message.activeId || '-'}`;
     case 'registered':
@@ -140,6 +143,9 @@ function createHub() {
       case 'label':
         source.label = message.label;
         break;
+      case 'kill':
+        logger.info(`hub kill requested source=${sourceId}`);
+        Deno.exit();
       default:
         return;
     }
@@ -249,6 +255,9 @@ async function readStdin(onMessage: (message: PreviewMessage) => void) {
       case 'label':
         onMessage({ action, label: decoder.decode((await generator.next()).value!) });
         break;
+      case 'kill':
+        onMessage({ action });
+        return;
       case 'close':
         return;
       default:
@@ -263,7 +272,13 @@ async function init(socket: WebSocket) {
   }
 
   try {
-    await readStdin((message) => send(socket, message));
+    await readStdin((message) => {
+      if (message.action === 'kill') {
+        logger.info('kill requested');
+        Deno.exit();
+      }
+      send(socket, message);
+    });
   } catch (e) {
     if (!(e instanceof Error) || e.name !== 'InvalidStateError') throw e;
   }
@@ -433,7 +448,13 @@ async function attachToPersistentServer(port: number) {
   if (app === 'ssh') {
     logger.info(`ssh hub owner reading stdin port=${port}`);
     const source = hub.registerSource();
-    readStdin((message) => hub.updateSource(source.id, message))
+    readStdin((message) => {
+      if (message.action === 'kill') {
+        logger.info(`ssh hub owner kill requested source=${source.id}`);
+        Deno.exit();
+      }
+      hub.updateSource(source.id, message);
+    })
       .catch((e) => {
         if (!(e instanceof Error) || e.message !== 'EOF') throw e;
       })

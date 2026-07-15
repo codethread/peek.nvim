@@ -30,6 +30,7 @@ _Markdown preview plugin for [Neovim](https://github.com/neovim/neovim)_
         require("peek").setup()
         vim.api.nvim_create_user_command("PeekOpen", require("peek").open, {})
         vim.api.nvim_create_user_command("PeekClose", require("peek").close, {})
+        vim.api.nvim_create_user_command("PeekKill", require("peek").kill, {})
     end,
 },
 ```
@@ -96,8 +97,9 @@ Multiple Neovim sessions can share the same SSH preview server. The first `PeekO
 starts the server on the configured port; later `PeekOpen` calls from other Neovim
 sessions attach to that server as additional numbered tabs in the browser UI. In SSH
 mode, `PeekClose` closes the current Neovim session's tab but leaves the shared server
-running. Server logs are written to Neovim's log directory as `peek.log`; Lua client
-request logs are written beside it as `peek-lua.log`.
+running. Use `:PeekKill` to stop the shared preview server. Server logs are written to
+Neovim's log directory as `peek.log`; Lua client request logs are written beside it as
+`peek-lua.log`.
 
 ### :art: Diagram examples
 
@@ -128,6 +130,7 @@ digraph Peek {
 | ------- | -------------------------------------------------- |
 | open    | Open preview window                                |
 | close   | Close preview window                               |
+| kill    | Stop the running preview service                   |
 | is_open | Returns `true` if preview window is currently open |
 
 Example command setup:
@@ -135,6 +138,7 @@ Example command setup:
 ```lua
 vim.api.nvim_create_user_command('PeekOpen', require('peek').open, {})
 vim.api.nvim_create_user_command('PeekClose', require('peek').close, {})
+vim.api.nvim_create_user_command('PeekKill', require('peek').kill, {})
 ```
 
 The following keybinds are active when preview window is focused:
