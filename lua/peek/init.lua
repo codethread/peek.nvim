@@ -23,6 +23,7 @@ local function open(bufnr)
   app.init(function()
     augroup = nvim_del_augroup_by_id(augroup)
   end)
+  app.context(bufnr)
   app.base(vim.fn.fnamemodify(vim.uri_to_fname(vim.uri_from_bufnr(bufnr)), ':p:h'))
   app.show(get_buf_content(bufnr))
   app.scroll(line('.'))
@@ -45,10 +46,11 @@ local function open(bufnr)
     app.show(content)
   end
 
-  nvim_create_autocmd('BufWritePost', {
+  nvim_create_autocmd({ 'BufWritePost', 'BufFilePost' }, {
     group = augroup,
     buffer = bufnr,
     callback = function()
+      app.context(bufnr)
       app.show(get_buf_content(bufnr))
     end,
   })
@@ -121,6 +123,10 @@ module.kill = ensure_init(function()
   app.kill()
 end)
 
+module.status = ensure_init(function()
+  app.status()
+end)
+
 module.is_open = ensure_init(function()
   return not not augroup
 end)
@@ -133,6 +139,7 @@ function module.setup(cfg)
   initialized = true
 
   vim.api.nvim_create_user_command('PeekKill', module.kill, {})
+  vim.api.nvim_create_user_command('PeekStatus', module.status, {})
 end
 
 return module

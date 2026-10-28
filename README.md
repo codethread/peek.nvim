@@ -101,6 +101,15 @@ running. Use `:PeekKill` to stop the shared preview server. Server logs are writ
 Neovim's log directory as `peek.log`; Lua client request logs are written beside it as
 `peek-lua.log`.
 
+Run `:PeekStatus` to query the live server, including after closing your own SSH
+preview tab. It reports server health, the listening address and port, connected
+Neovim sessions (with PIDs), their active preview buffers, and browser connections.
+Full URLs such as `http://192.168.1.10:3000` are included for opening the preview
+from another machine. The loopback URL is also shown for SSH port forwarding;
+interface IPs are only reachable if your network and firewall allow it. Each
+Neovim connection has one active preview buffer, updated as you switch files.
+`PeekStatus` is registered automatically by `setup()` and does not start a server.
+
 ### :art: Diagram examples
 
 Mermaid diagrams render from fenced blocks:
@@ -131,6 +140,7 @@ digraph Peek {
 | open    | Open preview window                                |
 | close   | Close preview window                               |
 | kill    | Stop the running preview service                   |
+| status  | Show live server, connection, buffer, and URL details |
 | is_open | Returns `true` if preview window is currently open |
 
 Example command setup:

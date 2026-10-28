@@ -9,7 +9,7 @@ local module = {}
 local cwd = debug.getinfo(1, 'S').source:sub(2):match('(.*[/\\])')
 local log_path =
   string.format('%s%speek-lua.log', vim.fn.stdpath('log'), vim.loop.os_uname().sysname:match('Windows') and '\\' or '/')
-local cmd, channel, on_exit_callback
+local cmd, channel, on_exit_callback, server_port
 
 local function log(msg)
   local line = string.format('%s pid=%s %s', os.date('%Y-%m-%d %H:%M:%S'), vim.fn.getpid(), msg)
@@ -76,6 +76,7 @@ function module.setup()
     '--allow-net',
     '--allow-env',
     '--allow-run',
+    '--allow-sys=networkInterfaces',
     '--no-check',
     entry,
   }, args)
@@ -116,8 +117,21 @@ function module.init(on_exit)
     end)
   end
 
+  local stdout = ''
   channel = vim.fn.jobstart(cmd, {
     cwd = cwd,
+    on_stdout = function(_, data)
+      stdout = stdout .. table.concat(data, '\n')
+      while stdout:find('\n', 1, true) do
+        local pos = stdout:find('\n', 1, true)
+        local line = stdout:sub(1, pos - 1)
+        stdout = stdout:sub(pos + 1)
+        local ok, event = pcall(vim.json.decode, line)
+        if ok and type(event) == 'table' and event.event == 'listening' then
+          server_port = event.port
+        end
+      end
+    end,
     stderr_buffered = true,
     on_stderr = function(_, err)
       log('stderr received channel=' .. tostring(channel) .. ' lines=' .. tostring(#err))
@@ -136,6 +150,7 @@ function module.init(on_exit)
     detach = config.get('app') == 'ssh',
     on_exit = function(_, code, event)
       log('job exit channel=' .. tostring(channel) .. ' code=' .. tostring(code) .. ' event=' .. tostring(event))
+      server_port = nil
       if channel then
         vim.fn.chanclose(channel)
         channel = nil
@@ -152,6 +167,19 @@ function module.init(on_exit)
   if channel <= 0 then
     vim.api.nvim_notify('Peek error: failed to start deno job', vim.log.levels.ERROR, {})
     return
+  end
+
+  module.context = function(bufnr)
+    chansend(
+      channel,
+      message({
+        'context',
+        vim.json.encode({
+          pid = vim.fn.getpid(),
+          buffer = { number = bufnr, name = vim.api.nvim_buf_get_name(bufnr) },
+        }),
+      })
+    )
   end
 
   module.show = function(content)
@@ -171,6 +199,11 @@ function module.init(on_exit)
     log('send label channel=' .. tostring(channel) .. ' label=' .. tostring(label))
     chansend(channel, message({ 'label', label }))
   end
+end
+
+module.status = function()
+  local port = config.get('app') == 'ssh' and ssh_port() or server_port
+  require('peek.status').show(port, config.get('app'))
 end
 
 module.stop = function()

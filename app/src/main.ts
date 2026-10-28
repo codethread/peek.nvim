@@ -4,6 +4,7 @@ import { open } from 'https://deno.land/x/open@v0.0.6/index.ts';
 import { readChunks } from './read.ts';
 import log from './log.ts';
 import { render } from './markdownit.ts';
+import { type ConnectionStatus, type NvimContext, serverUrls } from './status.ts';
 
 const __args = parseArgs(Deno.args);
 const __dirname = dirname(new URL(import.meta.url).pathname);
@@ -25,6 +26,7 @@ type PreviewState = {
   lcount: number;
   line?: string;
   base?: string;
+  context?: NvimContext;
 };
 
 type PreviewMessage =
@@ -32,6 +34,7 @@ type PreviewMessage =
   | { action: 'scroll'; line: string; sourceId?: SourceId }
   | { action: 'base'; base: string; sourceId?: SourceId }
   | { action: 'label'; label: string; sourceId?: SourceId }
+  | { action: 'context'; context: NvimContext; sourceId?: SourceId }
   | { action: 'kill'; sourceId?: SourceId }
   | { action: 'tabs'; tabs: PreviewState[]; activeId?: SourceId }
   | { action: 'registered'; sourceId: SourceId; label: string }
@@ -49,6 +52,8 @@ function describeMessage(message: PreviewMessage) {
       return `base source=${message.sourceId || '-'} base=${message.base}`;
     case 'label':
       return `label source=${message.sourceId || '-'} label=${message.label}`;
+    case 'context':
+      return `context pid=${message.context.pid} buffer=${message.context.buffer.number}`;
     case 'kill':
       return `kill source=${message.sourceId || '-'}`;
     case 'tabs':
@@ -143,6 +148,9 @@ function createHub() {
       case 'label':
         source.label = message.label;
         break;
+      case 'context':
+        source.context = message.context;
+        return;
       case 'kill':
         logger.info(`hub kill requested source=${sourceId}`);
         Deno.exit();
@@ -202,6 +210,9 @@ function createHub() {
     updateSource,
     addViewer,
     addSource,
+    connections: (): ConnectionStatus[] =>
+      Array.from(sources.values(), ({ id, label, context }) => ({ id, label, context })),
+    viewerCount: () => viewers.size,
   };
 }
 
@@ -255,6 +266,12 @@ async function readStdin(onMessage: (message: PreviewMessage) => void) {
       case 'label':
         onMessage({ action, label: decoder.decode((await generator.next()).value!) });
         break;
+      case 'context':
+        onMessage({
+          action,
+          context: JSON.parse(decoder.decode((await generator.next()).value!)),
+        });
+        break;
       case 'kill':
         onMessage({ action });
         return;
@@ -263,24 +280,6 @@ async function readStdin(onMessage: (message: PreviewMessage) => void) {
       default:
         break;
     }
-  }
-}
-
-async function init(socket: WebSocket) {
-  if (DENO_ENV === 'development') {
-    return void (await import(join(__dirname, 'ipc_dev.ts'))).default(socket);
-  }
-
-  try {
-    await readStdin((message) => {
-      if (message.action === 'kill') {
-        logger.info('kill requested');
-        Deno.exit();
-      }
-      send(socket, message);
-    });
-  } catch (e) {
-    if (!(e instanceof Error) || e.name !== 'InvalidStateError') throw e;
   }
 }
 
@@ -305,9 +304,52 @@ async function attachToPersistentServer(port: number) {
 
 (() => {
   const app = __args['app'] ? JSON.parse(__args['app']) : 'webview';
+  const hub = createHub();
+  let address: { hostname: string; port: number };
+
+  function listening(boundAddress: { hostname: string; port: number }) {
+    address = boundAddress;
+    // stdout is reserved for structured messages to the Neovim job owner.
+    console.log(JSON.stringify({ event: 'listening', port: address.port }));
+  }
+
+  function statusResponse() {
+    return Response.json({
+      service: 'peek.nvim',
+      health: 'ok',
+      pid: Deno.pid,
+      app,
+      ...address,
+      urls: serverUrls(
+        address.hostname,
+        address.port,
+        Deno.networkInterfaces().map((i) => i.address),
+      ),
+      connections: hub.connections(),
+      viewers: hub.viewerCount(),
+    }, { headers: { 'cache-control': 'no-store' } });
+  }
+
+  function addViewer(socket: WebSocket) {
+    if (DENO_ENV === 'development' && app !== 'ssh') {
+      import(join(__dirname, 'ipc_dev.ts')).then((module) => module.default(socket));
+    } else {
+      hub.addViewer(socket);
+    }
+  }
+
+  function readLocalSource() {
+    const source = hub.registerSource();
+    readStdin((message) => hub.updateSource(source.id, message))
+      .catch((e) => {
+        if (!(e instanceof Error) || e.message !== 'EOF') throw e;
+      })
+      .finally(() => hub.unregisterSource(source.id));
+  }
 
   if (app === 'webview') {
     const onListen: Deno.ServeOptions['onListen'] = ({ hostname, port }) => {
+      listening({ hostname, port });
       const serverUrl = `${hostname.replace('0.0.0.0', 'localhost')}:${port}`;
       logger.info(`listening on ${serverUrl}`);
       const webview = new Deno.Command('deno', {
@@ -337,15 +379,17 @@ async function attachToPersistentServer(port: number) {
     };
 
     Deno.serve({ port: 0, onListen }, (request) => {
+      if (new URL(request.url).pathname === '/__peek/status') return statusResponse();
       const { socket, response } = Deno.upgradeWebSocket(request);
 
       socket.onopen = () => {
-        init(socket);
+        addViewer(socket);
       };
 
       return response;
     });
 
+    readLocalSource();
     return;
   }
 
@@ -371,9 +415,8 @@ async function attachToPersistentServer(port: number) {
   }
 
   const port = app === 'ssh' ? Number(__args['port'] || 3000) : 0;
-  const hub = createHub();
-
   const onListen: Deno.ServeOptions['onListen'] = ({ hostname, port }) => {
+    listening({ hostname, port });
     const serverUrl = `${hostname.replace('0.0.0.0', 'localhost')}:${port}`;
     logger.info(`listening on ${serverUrl}`);
 
@@ -403,6 +446,7 @@ async function attachToPersistentServer(port: number) {
         );
 
         if (upgrade.toLowerCase() != 'websocket') {
+          if (url.pathname === '/__peek/status') return statusResponse();
           if (app === 'ssh' && url.pathname === '/' && !url.searchParams.has('theme')) {
             url.searchParams.set('theme', String(__args.theme));
             return Response.redirect(url, 307);
@@ -423,10 +467,8 @@ async function attachToPersistentServer(port: number) {
           logger.info(`ws open role=${role || 'viewer'} app=${app}`);
           if (app === 'ssh' && role === 'source') {
             hub.addSource(socket);
-          } else if (app === 'ssh') {
-            hub.addViewer(socket);
           } else {
-            init(socket);
+            addViewer(socket);
           }
         };
 
@@ -445,21 +487,7 @@ async function attachToPersistentServer(port: number) {
     return;
   }
 
-  if (app === 'ssh') {
-    logger.info(`ssh hub owner reading stdin port=${port}`);
-    const source = hub.registerSource();
-    readStdin((message) => {
-      if (message.action === 'kill') {
-        logger.info(`ssh hub owner kill requested source=${source.id}`);
-        Deno.exit();
-      }
-      hub.updateSource(source.id, message);
-    })
-      .catch((e) => {
-        if (!(e instanceof Error) || e.message !== 'EOF') throw e;
-      })
-      .finally(() => hub.unregisterSource(source.id));
-  }
+  readLocalSource();
 })();
 
 const win_signals = ['SIGINT', 'SIGBREAK'] as const;
